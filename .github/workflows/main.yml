@@ -17,10 +17,10 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Instalar Flutter
+    - name: Instalar Flutter (Estable)
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.0'
+        channel: 'stable' # Usamos la última versión estable para evitar conflictos
 
     - name: Configurar Python
       uses: actions/setup-python@v4
@@ -32,9 +32,10 @@ jobs:
         pip install flet
         pip install -r requirements.txt
 
-    - name: Construir APK
+    - name: Construir APK (Con Auto-Aceptar)
       run: |
-        flet build apk --verbose
+        # El comando 'yes' responde SI a cualquier pregunta que haga Flet
+        yes | flet build apk --verbose
 
     - name: Subir APK generado
       uses: actions/upload-artifact@v4
