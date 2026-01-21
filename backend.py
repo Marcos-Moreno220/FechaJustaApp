@@ -2,8 +2,7 @@ import sqlite3
 from datetime import datetime
 import os
 
-# Intentamos importar la herramienta de Excel
-# Si no está instalada, no romperá la app, solo avisará.
+
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
@@ -11,7 +10,7 @@ except ImportError:
     Workbook = None
 
 # --- CONFIGURACIÓN ---
-DB_NAME = "fechajusta.db"
+DB_NAME = "fechajusta_v2.db"
 LISTA_BOCAS = ["Berchia", "Mayor", "Chango Mas", "Vea", "Carrefour"]
 
 # --- FUNCIONES DE BASE DE DATOS ---
