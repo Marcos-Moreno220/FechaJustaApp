@@ -1,0 +1,43 @@
+name: Construir APK Android
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configurar Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Instalar Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.0'
+
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Instalar Flet y dependencias
+      run: |
+        pip install flet
+        pip install -r requirements.txt
+
+    - name: Construir APK
+      run: |
+        flet build apk --verbose
+
+    - name: Subir APK generado
+      uses: actions/upload-artifact@v4
+      with:
+        name: fechajusta-apk
+        path: build/apk/app-release.apk
