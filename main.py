@@ -4,95 +4,121 @@ from datetime import datetime
 
 def main(page: ft.Page):
     # --- 1. CONFIGURACIÓN ---
-    page.title = "FechaJusta Mobile"
+    page.title = "FechaJusta 2.0"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 390
     page.window_height = 800
-    page.padding = 15
+    page.padding = 10
     page.scroll = "AUTO"
 
     # Iniciamos DB
     backend.inicializar_sistema()
 
-    # Memoria para el ID a borrar
-    borrar_ctx = {"id": None}
+    # Memoria para gestión
+    ctx_gestion = {"id": None, "nombre": ""}
 
-    # --- 2. LÓGICA VISUAL ---
-    def obtener_info_visual(fecha_str):
+    # --- 2. LÓGICA VISUAL (EMOJIS) ---
+    def obtener_emoji(fecha_str, estado):
+        if estado == "Corregido": return "🔵"
         try:
             hoy = datetime.now().date()
             venc = datetime.strptime(fecha_str, "%Y-%m-%d").date()
             dias = (venc - hoy).days
-            if dias <= 10: return "red", "warning"
-            elif dias <= 30: return "amber", "access_time"
-            else: return "green", "check_circle"
-        except:
-            return "grey", "help"
+            if dias <= 10: return "🔴"
+            elif dias <= 30: return "🟡"
+            else: return "🟢"
+        except: return "⚪"
 
-    # --- 3. DASHBOARD ---
-    txt_total_items = ft.Text("0", size=28, weight="bold", color="blue")
-    txt_total_plata = ft.Text("$0", size=28, weight="bold", color="green")
+    # --- 3. DASHBOARD Y EXCEL ---
+    txt_total_items = ft.Text("0", size=26, weight="bold", color="blue")
+    txt_total_plata = ft.Text("$0", size=26, weight="bold", color="green")
 
-    card_items = ft.Container(
-        content=ft.Column([
-            ft.Text("Productos", size=12, color="grey"),
-            txt_total_items
-        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        width=160, height=80, bgcolor="white", border_radius=10,
-        border=ft.border.all(1, "blue"), padding=10
-    )
+    def crear_tarjeta(titulo, widget_dato, color_borde):
+        return ft.Container(
+            content=ft.Column([
+                ft.Text(titulo, size=12, color="grey"),
+                widget_dato
+            ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=160, height=80, bgcolor="white", border_radius=12,
+            border=ft.border.all(1, color_borde), padding=10,
+            shadow=ft.BoxShadow(blur_radius=5, color="black12")
+        )
 
-    card_plata = ft.Container(
-        content=ft.Column([
-            ft.Text("Dinero en Riesgo", size=12, color="grey"),
-            txt_total_plata
-        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        width=160, height=80, bgcolor="white", border_radius=10,
-        border=ft.border.all(1, "green"), padding=10
-    )
+    fila_dashboard = ft.Row([
+        crear_tarjeta("Productos Activos", txt_total_items, "blue"),
+        crear_tarjeta("Dinero en Riesgo", txt_total_plata, "green")
+    ], alignment=ft.MainAxisAlignment.CENTER)
 
-    fila_dashboard = ft.Row([card_items, card_plata], alignment=ft.MainAxisAlignment.CENTER)
-
-    # --- 4. DIÁLOGO DE CONFIRMACIÓN (SOLUCIÓN UNIVERSAL) ---
-    def cerrar_dialogo(e):
-        dlg_confirmar.open = False
+    # --- FUNCIÓN DESCARGA EXCEL ---
+    def descargar_excel_click(e):
+        resultado = backend.exportar_a_excel()
+        # Mostramos mensaje con la ruta
+        color_msg = "green" if "Guardado" in resultado else "red"
+        page.snack_bar = ft.SnackBar(ft.Text(resultado), bgcolor=color_msg)
+        page.snack_bar.open = True
         page.update()
 
-    def confirmar_borrado(e):
-        id_a_borrar = borrar_ctx["id"]
-        print(f"🗑️ Ejecutando borrado de ID: {id_a_borrar}") 
-        
-        if id_a_borrar is not None:
-            backend.eliminar_producto_db(id_a_borrar)
-            # Al borrar, limpiamos el buscador para ver todo de nuevo o mantenemos la busqueda
-            actualizar_todo() 
-            
-        dlg_confirmar.open = False
+    # CORRECCIÓN AQUÍ: Usamos ElevatedButton con Emoji en vez de IconButton
+    btn_excel = ft.ElevatedButton(
+        "📥", # Emoji de bandeja de entrada/descarga
+        color="white",
+        bgcolor="green",
+        tooltip="Descargar Excel",
+        on_click=descargar_excel_click,
+        width=50
+    )
+
+    # Título con el botón al lado
+    encabezado_lista = ft.Row([
+        ft.Text("Mis Estadísticas", size=20, weight="bold"),
+        btn_excel
+    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
+    # --- 4. DIÁLOGOS ---
+    def cerrar_dialogos(e):
+        dlg_opciones.open = False
         page.update()
 
-    dlg_confirmar = ft.AlertDialog(
-        modal=True,
-        title=ft.Text("¿Borrar Producto?"),
-        content=ft.Text("Esta acción no se puede deshacer."),
+    def accion_corregido(e):
+        backend.cambiar_estado(ctx_gestion["id"], "Corregido")
+        dlg_opciones.open = False
+        actualizar_todo()
+        page.snack_bar = ft.SnackBar(ft.Text("✅ Corregido"))
+        page.snack_bar.open = True
+        page.update()
+
+    def accion_borrar(e):
+        backend.eliminar_producto_db(ctx_gestion["id"])
+        dlg_opciones.open = False
+        actualizar_todo()
+        page.snack_bar = ft.SnackBar(ft.Text("🗑️ Eliminado"))
+        page.snack_bar.open = True
+        page.update()
+
+    dlg_opciones = ft.AlertDialog(
+        title=ft.Text("Opciones"),
+        content=ft.Text("Elige una acción:"),
         actions=[
-            ft.TextButton("Cancelar", on_click=cerrar_dialogo),
-            ft.TextButton("Sí, Borrar", on_click=confirmar_borrado, style=ft.ButtonStyle(color="red")),
+            ft.ElevatedButton("✅ Corregido", on_click=accion_corregido, bgcolor="blue", color="white"),
+            ft.OutlinedButton("🗑️ Borrar", on_click=accion_borrar, style=ft.ButtonStyle(color="red")),
+            ft.TextButton("Cancelar", on_click=cerrar_dialogos),
         ],
-        actions_alignment=ft.MainAxisAlignment.END,
+        actions_alignment=ft.MainAxisAlignment.CENTER,
     )
 
-    def abrir_confirmacion(id_prod):
-        borrar_ctx["id"] = id_prod
-        print(f"⚠️ Preguntando por ID: {id_prod}")
-        dlg_confirmar.open = True
-        page.overlay.append(dlg_confirmar)
+    def abrir_menu_gestion(id_prod, nombre_prod):
+        ctx_gestion["id"] = id_prod
+        ctx_gestion["nombre"] = nombre_prod
+        dlg_opciones.title.value = f"{nombre_prod}"
+        dlg_opciones.open = True
+        page.overlay.append(dlg_opciones)
         page.update()
 
-    # ==========================================
-    #   VISTA: FORMULARIO
-    # ==========================================
+    # --- 5. VISTAS ---
+    # Formulario
     dd_boca = ft.Dropdown(label="Sucursal", options=[ft.dropdown.Option(b) for b in backend.LISTA_BOCAS], width=350)
     txt_nombre = ft.TextField(label="Producto", width=350)
+    txt_marca = ft.TextField(label="Marca", width=350)
     txt_cantidad = ft.TextField(label="Cant.", width=160, keyboard_type=ft.KeyboardType.NUMBER)
     txt_precio = ft.TextField(label="Precio $", width=160, keyboard_type=ft.KeyboardType.NUMBER)
     fila_precios = ft.Row([txt_cantidad, txt_precio], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
@@ -102,140 +128,94 @@ def main(page: ft.Page):
     def guardar_click(e):
         try:
             if not dd_boca.value or not txt_nombre.value or not txt_fecha.value:
-                lbl_resultado.value = "❌ Faltan datos"
+                lbl_resultado.value = "❌ Datos incompletos"
                 lbl_resultado.color = "red"
                 page.update()
                 return
-
             fecha_obj = datetime.strptime(txt_fecha.value, "%d/%m/%Y")
-            vencimiento_db = fecha_obj.strftime("%Y-%m-%d")
-            
-            backend.guardar_producto(
-                dd_boca.value, txt_nombre.value, "Gral", 
-                int(txt_cantidad.value or 0), vencimiento_db, float(txt_precio.value or 0)
-            )
-            
-            lbl_resultado.value = "✅ Guardado!"
+            venc_db = fecha_obj.strftime("%Y-%m-%d")
+            backend.guardar_producto(dd_boca.value, txt_nombre.value, txt_marca.value, "Gral", int(txt_cantidad.value or 0), venc_db, float(txt_precio.value or 0))
+            lbl_resultado.value = "✅ Guardado"
             lbl_resultado.color = "green"
-            
             txt_nombre.value = ""
+            txt_marca.value = ""
             txt_cantidad.value = ""
             txt_precio.value = ""
             txt_fecha.value = ""
             page.update()
-            
             if contenedor_principal.content == vista_lista:
-                # Si guardamos, limpiamos la búsqueda para ver el nuevo producto
                 txt_buscador.value = "" 
                 actualizar_todo()
-
         except ValueError:
-            lbl_resultado.value = "❌ Error en fecha"
+            lbl_resultado.value = "❌ Fecha incorrecta"
             lbl_resultado.color = "red"
             page.update()
 
-    btn_guardar = ft.ElevatedButton("GUARDAR", on_click=guardar_click, width=350, bgcolor="blue", color="white")
+    btn_guardar = ft.ElevatedButton("GUARDAR", on_click=guardar_click, width=350, bgcolor="blue", color="white", height=50)
 
     vista_carga = ft.Column([
-        ft.Text("Nueva Carga 📝", size=24, weight="bold", color="blue"),
-        dd_boca, txt_nombre, fila_precios, txt_fecha, 
+        ft.Text("Nueva Carga", size=24, weight="bold", color="blue"),
+        dd_boca, txt_marca, txt_nombre, fila_precios, txt_fecha, 
         ft.Divider(), btn_guardar, lbl_resultado
-    ])
+    ], scroll="AUTO")
 
-    # ==========================================
-    #   VISTA: TABLA + DASHBOARD + BUSCADOR
-    # ==========================================
+    # Lista
     tabla_datos = ft.DataTable(
-        width=350,
+        width=360, column_spacing=10, heading_row_height=40, data_row_min_height=50,
         columns=[
             ft.DataColumn(ft.Text("Est")),
             ft.DataColumn(ft.Text("Producto")),
             ft.DataColumn(ft.Text("Vence")),
             ft.DataColumn(ft.Text("Acción")),
-        ],
-        rows=[]
+        ], rows=[]
     )
 
-    # --- NUEVO: BARRA DE BÚSQUEDA ---
-    def buscador_change(e):
-        actualizar_todo() # Cada vez que escribes, filtra
+    def buscador_change(e): actualizar_todo()
 
-    txt_buscador = ft.TextField(
-        label="🔍 Buscar producto...", 
-        width=350, 
-        on_change=buscador_change,
-        border_radius=20
-    )
+    txt_buscador = ft.TextField(prefix_icon="search", hint_text="Buscar...", width=350, on_change=buscador_change, border_radius=20, content_padding=10)
 
     vista_lista = ft.Column([
-        ft.Text("Mis Estadísticas 📊", size=20, weight="bold"),
+        encabezado_lista, # Aquí está el título con el botón Excel
         fila_dashboard,
         ft.Divider(),
-        txt_buscador, # <--- AQUÍ ESTÁ EL BUSCADOR
-        ft.Text("Detalle de Vencimientos", size=16, weight="bold"),
-        tabla_datos
-    ])
+        txt_buscador,
+        ft.Text("Vencimientos", size=16, weight="bold"),
+        ft.Container(content=tabla_datos, padding=0)
+    ], scroll="AUTO")
 
     def actualizar_todo():
         cant, plata = backend.obtener_estadisticas()
         txt_total_items.value = str(cant)
         txt_total_plata.value = f"${plata:,.0f}"
-        
         tabla_datos.rows.clear()
-        
-        # --- LÓGICA DE FILTRADO ---
         termino = txt_buscador.value
-        if termino and len(termino) > 0:
-            # Si hay algo escrito, buscamos
-            datos = backend.buscar_productos(termino)
-        else:
-            # Si está vacío, traemos todo
-            datos = backend.obtener_todos_pendientes()
-        
+        datos = backend.obtener_productos(termino if termino else None)
         for p in datos:
-            pid, boca, nombre, venc, estado = p
-            color, icono_nom = obtener_info_visual(venc)
-            fecha_bonita = datetime.strptime(venc, "%Y-%m-%d").strftime("%d/%m")
-
-            boton_alerta = ft.ElevatedButton(
-                "Borrar", color="white", bgcolor="red", height=30,
-                style=ft.ButtonStyle(padding=5),
-                on_click=lambda e, id=pid: abrir_confirmacion(id)
-            )
-
-            fila = ft.DataRow(
-                cells=[
-                    ft.DataCell(ft.Icon(icono_nom, color=color)),
-                    ft.DataCell(ft.Text(nombre, weight="bold")),
-                    ft.DataCell(ft.Text(fecha_bonita)),
-                    ft.DataCell(boton_alerta),
-                ]
-            )
+            pid, boca, nombre, marca, venc, estado, cant, precio = p
+            emoji = obtener_emoji(venc, estado)
+            try: fecha_bonita = datetime.strptime(venc, "%Y-%m-%d").strftime("%d/%m/%y")
+            except: fecha_bonita = venc
+            marca_mostrar = marca if marca else "-"
+            col_prod = ft.Column([ft.Text(marca_mostrar.upper(), weight="bold", size=12), ft.Text(nombre, size=13)], spacing=2)
+            btn_gestion = ft.ElevatedButton("⚙️", color="white", bgcolor="blue", width=40, on_click=lambda e, id=pid, nom=nombre: abrir_menu_gestion(id, nom), style=ft.ButtonStyle(padding=0))
+            fila = ft.DataRow(cells=[ft.DataCell(ft.Text(emoji, size=20)), ft.DataCell(col_prod), ft.DataCell(ft.Text(fecha_bonita, size=12)), ft.DataCell(btn_gestion)])
             tabla_datos.rows.append(fila)
         page.update()
 
-    # ==========================================
-    #   NAVEGACIÓN
-    # ==========================================
-    contenedor_principal = ft.Container(content=vista_carga)
-
+    # Navegación
+    contenedor_principal = ft.Container(content=vista_carga, expand=True)
     def ir_a_carga(e):
         contenedor_principal.content = vista_carga
         page.update()
-
     def ir_a_lista(e):
         actualizar_todo()
         contenedor_principal.content = vista_lista
         page.update()
 
     botonera = ft.Row(
-        controls=[
-            ft.ElevatedButton("📝 Cargar", on_click=ir_a_carga, expand=True),
-            ft.ElevatedButton("📊 Ver Datos", on_click=ir_a_lista, expand=True),
-        ],
+        controls=[ft.ElevatedButton("📝 Cargar", on_click=ir_a_carga, expand=True, height=50), ft.ElevatedButton("📊 Ver Datos", on_click=ir_a_lista, expand=True, height=50)],
         alignment=ft.MainAxisAlignment.CENTER
     )
-
     page.add(contenedor_principal, ft.Divider(), botonera)
 
 ft.app(target=main)
