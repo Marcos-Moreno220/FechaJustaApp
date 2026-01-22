@@ -159,8 +159,18 @@ def exportar_a_excel():
     # Guardamos en la carpeta actual (Escritorio/FechaJusta)
     ruta_local = os.path.join(os.getcwd(), nombre_archivo)
     
+   # --- CÓDIGO ESPECIAL PARA ANDROID ---
+    # Intenta guardar directamente en la carpeta Descargas del celular
+    ruta_android = f"/storage/emulated/0/Download/{nombre_archivo}"
+    
     try:
-        wb.save(ruta_local)
-        return f"✅ Guardado: {nombre_archivo}"
-    except Exception as e:
-        return f"❌ Error al guardar: {e}"
+        wb.save(ruta_android)
+        return f"✅ Revisa en Descargas: {nombre_archivo}"
+    except:
+        # Si falla, intentamos en la carpeta local (por si acaso)
+        try:
+            ruta_local = os.path.join(os.getcwd(), nombre_archivo)
+            wb.save(ruta_local)
+            return f"⚠️ Guardado en carpeta App (Oculta): {nombre_archivo}"
+        except Exception as e:
+            return f"❌ Error guardando: {str(e)}" 
